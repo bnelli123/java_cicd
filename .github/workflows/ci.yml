@@ -18,13 +18,10 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+
       - name: Build and Test
         run: mvn --batch-mode clean verify
-      - name: Upload JAR Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: java-application
-          path: target/*.jar
+
       - name: Install Snyk CLI
         run: npm install -g snyk
 
@@ -35,6 +32,7 @@ jobs:
           snyk test \
             --file=pom.xml \
             --severity-threshold=critical
+
       - name: SonarQube Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TKN }}
