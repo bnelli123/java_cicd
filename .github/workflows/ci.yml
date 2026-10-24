@@ -63,12 +63,24 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Debug GitHub OIDC
+        uses: actions/github-script@v7
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const claims = JSON.parse(
+              Buffer.from(token.split('.')[1], 'base64url').toString()
+            );
+
+            core.info(`Repository: ${context.repo.owner}/${context.repo.repo}`);
+            core.info(`OIDC Subject: ${claims.sub}`);
+            core.info(`OIDC Audience: ${claims.aud}`);
+            core.info(`OIDC Issuer: ${claims.iss}`);
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+                aws-region: ${{ env.AWS_REGION }}
 
       - name: Get Snyk Token
         uses: aws-actions/aws-secretsmanager-get-secrets@v3
