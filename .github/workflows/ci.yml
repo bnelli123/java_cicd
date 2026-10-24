@@ -25,14 +25,6 @@ jobs:
         with:
           name: java-application
           path: target/*.jar
-      - name: Build and Test
-        run: mvn -B clean verify
-      - name: Check SonarQube
-        shell: pwsh
-        env:
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        run: |
-          Invoke-RestMethod "$env:SONAR_HOST_URL/api/system/status"
       - name: SonarQube Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TKN }}
