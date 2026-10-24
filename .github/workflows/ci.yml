@@ -27,14 +27,12 @@ jobs:
           path: target/*.jar
       - name: Build and Test
         run: mvn -B clean verify
-      - name: Check SonarQube Connectivity
+      - name: Check SonarQube
+        shell: pwsh
         env:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
         run: |
-          echo "Checking SonarQube connectivity..."
-          curl -v --connect-timeout 10 \
-            --max-time 20 \
-            "$SONAR_HOST_URL/api/system/status"
+          Invoke-RestMethod "$env:SONAR_HOST_URL/api/system/status"
       - name: SonarQube Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TKN }}
