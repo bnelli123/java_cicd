@@ -18,6 +18,9 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - name: Gitleaks Secret Scan
+        run: |
+          gitleaks git . --redact --exit-code 1
       - name: Build and Test
         run: mvn --batch-mode clean verify
       - name: Upload JAR Artifact
