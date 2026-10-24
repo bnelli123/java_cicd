@@ -12,15 +12,10 @@ permissions:
 
 env:
   AWS_REGION: ap-south-1
-  ECR_REPOSITORY: java-cicd
-  IMAGE_NAME: java-cicd
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
 
-  # --------------------------------------
   # Stage 1: Build and Test
-  # --------------------------------------
   build:
     name: Build and Test
     runs-on: ubuntu-latest
@@ -39,191 +34,17 @@ jobs:
       - name: Build and Test
         run: mvn --batch-mode clean verify
 
-      - name: Upload Maven Build Artifact
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: maven-build
           path: target/
           if-no-files-found: error
-          retention-days: 7
 
-  # --------------------------------------
   # Stage 2: Snyk SCA
-  # --------------------------------------
-  snyk-sca:
-    name: Snyk SCA
+  sca:
+    name: Snyk SCA Scan
     needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: maven
-
-      - name: Install Snyk CLI
-        run: npm install -g snyk
-
-      - name: Snyk SCA Scan
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_PAT }}
-        run: |
-          snyk test \
-            --file=pom.xml \
-            --severity-threshold=critical
-
-  # --------------------------------------
-  # Stage 3: SonarQube
-  # Runs parallel with Snyk SCA
-  # --------------------------------------
-  sonarqube:
-    name: SonarQube Analysis
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: maven
-
-      - name: Download Maven Build
-        uses: actions/download-artifact@v4
-        with:
-          name: maven-build
-          path: target/
-
-      - name: SonarQube Analysis
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TKN }}
-          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
-        run: |
-          mvn -B \
-            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
-            -Dsonar.host.url="$SONAR_HOST_URL" \
-            -Dsonar.token="$SONAR_TOKEN" \
-            -Dsonar.qualitygate.wait=true
-
-  # --------------------------------------
-  # Stage 4: CycloneDX SBOM
-  # --------------------------------------
-  sbom:
-    name: Publish CycloneDX SBOM
-    needs: [snyk-sca, sonarqube]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download Maven Build
-        uses: actions/download-artifact@v4
-        with:
-          name: maven-build
-          path: target/
-
-      - name: Verify SBOM
-        run: |
-          test -s target/bom.json
-          python3 -m json.tool target/bom.json > /dev/null
-
-      - name: Upload CycloneDX SBOM
-        uses: actions/upload-artifact@v4
-        with:
-          name: cyclonedx-sbom
-          path: target/bom.json
-          if-no-files-found: error
-
-  # --------------------------------------
-  # Stage 5: Docker Build
-  # --------------------------------------
-  docker-build:
-    name: Docker Build
-    needs: sbom
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download Maven Build
-        uses: actions/download-artifact@v4
-        with:
-          name: maven-build
-          path: target/
-
-      - name: Build Docker Image
-        run: |
-          docker build \
-            -t "$IMAGE_NAME:$IMAGE_TAG" .
-
-      - name: Save Docker Image
-        run: |
-          docker save \
-            -o docker-image.tar \
-            "$IMAGE_NAME:$IMAGE_TAG"
-
-      - name: Upload Docker Image Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image
-          path: docker-image.tar
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
-
-  # --------------------------------------
-  # Stage 6: Container Security Scan
-  # --------------------------------------
-  snyk-container:
-    name: Snyk Container Scan
-    needs: docker-build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download Docker Image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-
-      - name: Load Docker Image
-        run: docker load -i docker-image.tar
-
-      - name: Install Snyk CLI
-        run: npm install -g snyk
-
-      - name: Snyk Container Scan
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_PAT }}
-        run: |
-          snyk container test \
-            "$IMAGE_NAME:$IMAGE_TAG" \
-            --file=Dockerfile \
-            --severity-threshold=critical
-
-  # --------------------------------------
-  # Stage 7: Push Approved Image to ECR
-  # --------------------------------------
-  push-ecr:
-    name: Push Image to AWS ECR
-    needs: snyk-container
-
-    if: >
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
-
     runs-on: ubuntu-latest
 
     permissions:
@@ -231,13 +52,15 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download Approved Docker Image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Load Docker Image
-        run: docker load -i docker-image.tar
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -245,23 +68,67 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Verify AWS Identity
-        run: aws sts get-caller-identity
+      - name: Get Snyk Token
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            SNYK_TOKEN,snyk-token
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Install Snyk CLI
+        run: npm install -g snyk
 
-      - name: Push Image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      - name: Snyk SCA Scan
         run: |
-          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          snyk test \
+            --file=pom.xml \
+            --severity-threshold=critical
 
-          docker tag \
-            "$IMAGE_NAME:$IMAGE_TAG" \
-            "$IMAGE_URI"
+  # Stage 3: SonarQube
+  sonarqube:
+    name: SonarQube Analysis
+    needs: sca
+    runs-on: ubuntu-latest
 
-          docker push "$IMAGE_URI"
+    permissions:
+      contents: read
+      id-token: write
 
-          echo "Published: $IMAGE_URI"
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-build
+          path: target/
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get SonarQube Token
+        uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            SONAR_TOKEN,sonarqube-token
+
+      - name: SonarQube Analysis
+        env:
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+        run: |
+          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.qualitygate.wait=true
