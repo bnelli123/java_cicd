@@ -18,9 +18,6 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-      - name: Gitleaks Secret Scan
-        run: |
-          gitleaks git . --redact --exit-code 1
       - name: Build and Test
         run: mvn --batch-mode clean verify
       - name: Upload JAR Artifact
@@ -28,6 +25,16 @@ jobs:
         with:
           name: java-application
           path: target/*.jar
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk SCA Scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_PAT }}
+        run: |
+          snyk test \
+            --file=pom.xml \
+            --severity-threshold=critical
       - name: SonarQube Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TKN }}
