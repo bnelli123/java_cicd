@@ -179,6 +179,18 @@ jobs:
           docker build \
             -t "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}" \
             .
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk Container Scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_PAT }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          snyk container test \
+            "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}" \
+            --file=Dockerfile \
+            --severity-threshold=critical
 
       - name: Verify Docker Image
         env:
