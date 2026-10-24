@@ -68,11 +68,11 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get Snyk Token
-        uses: aws-actions/aws-secretsmanager-get-secrets@v3
-        with:
-          secret-ids: |
-            SNYK_TOKEN,snyk-token
+      # - name: Get Snyk Token
+      #   uses: aws-actions/aws-secretsmanager-get-secrets@v3
+      #   with:
+      #     secret-ids: |
+      #       SNYK_TOKEN,snyk-token
 
       - name: Install Snyk CLI
         run: npm install -g snyk
@@ -116,11 +116,11 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get SonarQube Token
-        uses: aws-actions/aws-secretsmanager-get-secrets@v3
-        with:
-          secret-ids: |
-            SONAR_TOKEN,sonarqube-token
+      # - name: Get SonarQube Token
+      #   uses: aws-actions/aws-secretsmanager-get-secrets@v3
+      #   with:
+      #     secret-ids: |
+      #       SONAR_TOKEN,sonarqube-token
 
       - name: SonarQube Analysis
         env:
