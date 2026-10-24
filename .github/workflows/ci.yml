@@ -80,7 +80,7 @@ jobs:
 
       - name: Snyk SCA Scan
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{ secrets.SNYK_PAT }}
         run: |
           snyk test \
             --file=pom.xml \
